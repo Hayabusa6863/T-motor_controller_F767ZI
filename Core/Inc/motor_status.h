@@ -1,7 +1,7 @@
 #ifndef MOTOR_STATUS_H_
 #define MOTOR_STATUS_H_
 
-#include "main.h"
+#include "stm32f7xx_hal.h"
 
 // available type of motor
 enum class T_motor{
@@ -16,10 +16,10 @@ private:
 	uint8_t can_id;
 	T_motor motor_type;
 
-	static const float Kp_max = 500.0;
-	static const float Kp_min = 0.0;
-	static const float Kd_max = 5.0;
-	static const float Kd_min = 0.0;
+	static constexpr float Kp_max = 500.0;
+	static constexpr float Kp_min = 0.0;
+	static constexpr float Kd_max = 5.0;
+	static constexpr float Kd_min = 0.0;
 
 	float P_max, P_min;		// max/min value of Position
 	float V_max, V_min;		// max/min value of Velocity

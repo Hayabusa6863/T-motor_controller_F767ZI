@@ -18,7 +18,6 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include <motor_status.h>
 #include "main.h"
 #include "cmsis_os.h"
 #include "fatfs.h"
@@ -27,6 +26,7 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "string.h"
+#include "T_motor_controller.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -78,6 +78,9 @@ static const char* filename = "log.csv";
 CAN_RxHeaderTypeDef RxHeader;
 CAN_TxHeaderTypeDef TxHeader;
 uint8_t Rx_buffer[8];
+
+/* T-motor_controller */
+T_motor_controller controller;
 
 /* USER CODE END PV */
 
@@ -495,7 +498,7 @@ static void MX_GPIO_Init(void)
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 	if(HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, Rx_buffer) == HAL_OK){
 		// copy RxMessage data to buffer(no conversion from integer to float due to ISR context)
-
+		// set_reply
 
 	}
 }
