@@ -80,7 +80,7 @@ CAN_TxHeaderTypeDef TxHeader;
 uint8_t Rx_buffer[8];
 
 /* T-motor_controller */
-T_motor_controller controller;
+T_motor_controller controller(&hcan1);
 
 /* USER CODE END PV */
 
@@ -147,8 +147,19 @@ int main(void)
 
   TxHeader.RTR = CAN_RTR_DATA;
   TxHeader.IDE = CAN_ID_STD;
-  TxHeader.DLC = 3;
+  TxHeader.DLC = 8;
   TxHeader.TransmitGlobalTime = DISABLE;
+
+
+  /* SD-card settings */
+  if(f_mount(&SDFatFS, (TCHAR const*)SDPath, 0) != FR_OK){
+	  Error_Handler();
+  }
+  if(f_open(&SDFile, filename, FA_CREATE_ALWAYS|FA_WRITE) != FR_OK){
+	  Error_Handler();
+  }
+
+
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -498,7 +509,7 @@ static void MX_GPIO_Init(void)
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 	if(HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, Rx_buffer) == HAL_OK){
 		// copy RxMessage data to buffer(no conversion from integer to float due to ISR context)
-		// set_reply
+		// set_reply(&RXHeader);
 
 	}
 }
@@ -528,7 +539,7 @@ void StartSDcard(void *argument)
 void CAN_send(void *argument)
 {
   /* USER CODE BEGIN CAN_send */
-
+	// controller.execute();
   /* USER CODE END CAN_send */
 }
 
