@@ -5,7 +5,7 @@ motor_status::motor_status(void){
 	this->can_id = 0;
 	this->motor_type = MotorModel::NOT_SPECIFIED;
 
-	pos_int = 1<<(Position_bit_num-1);
+	pos_int = 1<<(Position_bit_num-1);	// set default value (equals to 0)
 	vel_int = 1<<(Velocity_bit_num-1);
 	eff_int = 1<<(Effort_bit_num-1);
 }
@@ -50,6 +50,15 @@ HAL_StatusTypeDef motor_status::setParam(MotorModel mt){
 	}
 }
 
+static float bigger(float x, float y){
+	return (x>y) ? x : y;
+}
+
+static float smaller(float x, float y){
+	return (x>y) ? y : x;
+}
+
+
 // conversion from integer to float
 float motor_status::uint_to_float(int x, float x_min, float x_max, uint8_t bits){
 	return (x-x_min)*((1<<bits)-1)/(x_max-x_min);
@@ -62,15 +71,44 @@ int float_to_uint(float x, float x_min, float x_max, uint8_t bits){
 }
 
 
+// return own CAN_ID
+const uint8_t motor_status::getCanId(void){
+	return this->can_id;
+}
+
+
 // convert from 5-byte RxData (except id_data) to each data
 void motor_status::deserialize(const uint8_t *rxdata){
 	pos_int = (rxdata[0]<<8) | rxdata[1];
 	vel_int = (rxdata[2]<<4) | (rxdata[3]>>4);
 	eff_int = ((rxdata[3])&0xF) | rxdata[4];
+
+	pos = uint_to_float(pos_int, P_min, P_max, Position_bit_num);
+	vel = uint_to_float(vel_int, V_min, V_max, Velocity_bit_num);
+	eff = uint_to_float(eff_int, T_min, T_max, Effort_bit_num);
 }
 
 
+//
+void motor_status::serialize(uint8_t *txdata){
+	pos_ref = this->smaller(this->bigger(P_min, pos_ref), P_max);
+	vel_ref = smaller(bigger(V_min, vel_ref), V_max);
+	eff_ref = smaller(bigger(T_min, eff_ref), T_max);
+	Kp 		= smaller(bigger(Kp_min, Kp), Kp_max);
+	Kd 		= smaller(bigger(Kd_min, Kd), Kd_max);
 
-void serialize(uint8_t *txdata){
+	int pos_ref_int = float_to_uint(pos_ref, P_min, P_max, Position_bit_num);
+	int vel_ref_int = float_to_uint(vel_ref, V_min, V_max, Velocity_bit_num);
+	int eff_ref_int = float_to_uint(eff_ref, T_min, T_max, Effort_bit_num);
+	int Kp_int 		= float_to_uint(Kp, Kp_min, Kp_max, Kp_bit_num);
+	int Kd_int 		= float_to_uint(Kd, Kd_min, Kd_max, Kd_bit_num);
 
+	txdata[0] = pos_ref_int >> 8;	// Position 8-H
+	txdata[1] = pos_ref_int & 0xFF;	// Position 8-L
+	txdata[2] = vel_ref_int >> 4;	// Velocity 8-H
+	txdata[3] = ((vel_ref_int & 0xF)<<4) | (Kp_int >> 8);	// Velocity 4-L & Kp 4-H
+	txdata[4] = Kp_int & 0xFF;		// Kp 8-L
+	txdata[5] = Kd_int >> 8;		// Kd 8-H
+	txdata[6] = ((Kd_int & 0xF) << 4) | (eff_ref_int >> 8);	// Kd 4-L & Effort 4-H
+	txdata[7] = eff_ref_int & 0xFF;	// Effort 8-L
 }

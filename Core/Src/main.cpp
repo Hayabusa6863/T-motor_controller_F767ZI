@@ -76,7 +76,6 @@ static const char* filename = "log.csv";
 
 /* CAN-communication */
 CAN_RxHeaderTypeDef RxHeader;
-CAN_TxHeaderTypeDef TxHeader;
 uint8_t Rx_buffer[8];
 
 /* T-motor_controller */
@@ -144,13 +143,6 @@ int main(void)
   if(HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK){
 	  Error_Handler();
   }
-
-  TxHeader.RTR = CAN_RTR_DATA;
-  TxHeader.IDE = CAN_ID_STD;
-  TxHeader.DLC = 8;
-  TxHeader.TransmitGlobalTime = DISABLE;
-
-
   /* SD-card settings */
   if(f_mount(&SDFatFS, (TCHAR const*)SDPath, 0) != FR_OK){
 	  Error_Handler();
@@ -509,8 +501,7 @@ static void MX_GPIO_Init(void)
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 	if(HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, Rx_buffer) == HAL_OK){
 		// copy RxMessage data to buffer(no conversion from integer to float due to ISR context)
-		// set_reply(&RXHeader);
-
+		controller.unpack_reply(Rx_buffer);
 	}
 }
 /* USER CODE END 4 */
