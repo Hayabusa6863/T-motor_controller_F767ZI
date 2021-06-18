@@ -50,26 +50,6 @@ HAL_StatusTypeDef motor_status::setParam(MotorModel mt){
 	}
 }
 
-static float bigger(float x, float y){
-	return (x>y) ? x : y;
-}
-
-static float smaller(float x, float y){
-	return (x>y) ? y : x;
-}
-
-
-// conversion from integer to float
-float motor_status::uint_to_float(int x, float x_min, float x_max, uint8_t bits){
-	return (x-x_min)*((1<<bits)-1)/(x_max-x_min);
-}
-
-
-// conversion from float to integer
-int float_to_uint(float x, float x_min, float x_max, uint8_t bits){
-	return ((float)x)*(x_max-x_min) / ((float)((1<<bits)-1)) + x_min;
-}
-
 
 // return own CAN_ID
 const uint8_t motor_status::getCanId(void){
@@ -91,7 +71,7 @@ void motor_status::deserialize(const uint8_t *rxdata){
 
 //
 void motor_status::serialize(uint8_t *txdata){
-	pos_ref = this->smaller(this->bigger(P_min, pos_ref), P_max);
+	pos_ref = smaller(bigger(P_min, pos_ref), P_max);
 	vel_ref = smaller(bigger(V_min, vel_ref), V_max);
 	eff_ref = smaller(bigger(T_min, eff_ref), T_max);
 	Kp 		= smaller(bigger(Kp_min, Kp), Kp_max);

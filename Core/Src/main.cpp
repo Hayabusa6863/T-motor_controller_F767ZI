@@ -27,6 +27,7 @@
 #include "stdio.h"
 #include "string.h"
 #include "T_motor_controller.h"
+#include "inttypes.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -36,6 +37,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define MOTOR_ID	1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -72,7 +74,9 @@ FRESULT file_res;
 uint32_t byteswritten, bytesread;
 uint8_t wtext[] = "SD card check\r\n";
 char write_buffer[_MAX_SS];
-static const char* filename = "log.csv";
+char time_buffer[64];
+char EOL[] = "\r\n";
+static const char* filename = "log10ms.csv";
 
 /* CAN-communication */
 CAN_RxHeaderTypeDef RxHeader;
@@ -138,12 +142,12 @@ int main(void)
   MX_SDMMC1_SD_Init();
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
-  // start CAN
+  /** CAN **/
   HAL_CAN_Start(&hcan1);
   if(HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK){
 	  Error_Handler();
   }
-  /* SD-card settings */
+  /** SD-card **/
   if(f_mount(&SDFatFS, (TCHAR const*)SDPath, 0) != FR_OK){
 	  Error_Handler();
   }
@@ -151,7 +155,25 @@ int main(void)
 	  Error_Handler();
   }
 
+  sprintf(write_buffer, "Time[ms], ");
+  f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
 
+  for(uint8_t i=0; i<controller.getMotorNum(); i++){
+	  sprintf(write_buffer, "Pos, Vel, Eff, ");
+	  f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
+  }
+
+  f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
+
+
+  /** motor **/
+  controller.add_motor(MOTOR_ID, MotorModel::AK80_6);
+  controller.setTargetPosition(MOTOR_ID, 0.0);
+  controller.setTargetVelocity(MOTOR_ID, 0.0);
+  controller.setTargetEffort(MOTOR_ID, 0.0);
+  controller.setKp(MOTOR_ID, 0.0);
+  controller.setKd(MOTOR_ID, 0.0);
+  controller.enterControlMode(MOTOR_ID);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -171,6 +193,7 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
+  osTimerStart(CAN_send_timerHandle, 10);
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -516,12 +539,19 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 void StartSDcard(void *argument)
 {
   /* USER CODE BEGIN 5 */
-	osTimerStart(CAN_send_timerHandle, 1000);
   /* Infinite loop */
   for(;;)
   {
-	HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
-    osDelay(2000);
+	sprintf(time_buffer, "%" PRIu32, HAL_GetTick());
+	f_write(&SDFile, time_buffer, strlen((char *)time_buffer), (UINT*)&byteswritten);
+
+	for(uint8_t i=0; i<controller.getMotorNum(); i++){
+		sprintf(write_buffer, "%f, %f, %f, ", controller.getPosition(MOTOR_ID), controller.getVelocity(MOTOR_ID), controller.getEffort(MOTOR_ID));
+		f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
+	}
+	f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
+
+    osDelay(10);
   }
   /* USER CODE END 5 */
 }
@@ -530,7 +560,7 @@ void StartSDcard(void *argument)
 void CAN_send(void *argument)
 {
   /* USER CODE BEGIN CAN_send */
-	// controller.execute();
+	controller.execute();	// send command to all registered motors
   /* USER CODE END CAN_send */
 }
 

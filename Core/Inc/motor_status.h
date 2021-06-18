@@ -8,6 +8,7 @@
 #define MOTOR_STATUS_H_
 
 #include "stm32f7xx_hal.h"
+#include "basic_op.h"
 
 // available type of motor
 enum class MotorModel{
@@ -37,13 +38,8 @@ private:
 	float V_max, V_min;		// max/min value of Velocity
 	float T_max, T_min;		// max/min value of Effort
 
-
-
 	HAL_StatusTypeDef setParam(MotorModel);
-	static float bigger(float, float);
-	static float smaller(float, float);
-	float uint_to_float(int, float, float, uint8_t);
-	int float_to_uint(float, float, float, uint8_t);
+
 
 public:
 	// Integer raw data

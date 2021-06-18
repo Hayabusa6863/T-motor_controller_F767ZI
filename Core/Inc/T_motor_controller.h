@@ -14,8 +14,8 @@ class T_motor_controller{
 private:
 	CAN_HandleTypeDef *priv_hcan;
 	CAN_TxHeaderTypeDef pTxHeader;
-	uint8_t TxData[8];
-	uint32_t TxMailbox;
+	uint8_t pTxData[8];
+	uint32_t pTxMailbox;
 
 	std::vector<motor_status> motor;
 	std::map<uint8_t, uint8_t> motor_id;	// the pair of CAN_ID and Index of vector
@@ -41,6 +41,11 @@ public:
 	float getPosition(uint8_t can_id);
 	float getVelocity(uint8_t can_id);
 	float getEffort(uint8_t can_id);
+	uint8_t getMotorNum(void);
+
+	void enterControlMode(uint8_t can_id);
+	void exitControlMode(uint8_t can_id);
+	void setZeroPosition(uint8_t can_id);
 
 	void execute(void);	// control all registered motor
 };

@@ -23,7 +23,7 @@ HAL_StatusTypeDef T_motor_controller::add_motor(uint8_t can_id_, MotorModel mt_)
 // pack command to CAN_Tx_Message
 void T_motor_controller::pack_cmd(motor_status& m){
 	pTxHeader.StdId = m.getCanId();
-	m.serialize(TxData);
+	m.serialize(pTxData);
 }
 
 
@@ -73,6 +73,57 @@ float T_motor_controller::getEffort(uint8_t can_id_){
 }
 
 
+uint8_t T_motor_controller::getMotorNum(void){
+	return motor_num;
+}
+
+
+
+void T_motor_controller::enterControlMode(uint8_t can_id_){
+	uint8_t enter_CM_data[8];
+	enter_CM_data[0] = 0xFF;
+	enter_CM_data[1] = 0xFF;
+	enter_CM_data[2] = 0xFF;
+	enter_CM_data[3] = 0xFF;
+	enter_CM_data[4] = 0xFF;
+	enter_CM_data[5] = 0xFF;
+	enter_CM_data[6] = 0xFF;
+	enter_CM_data[7] = 0xFC;
+	pTxHeader.StdId = can_id_;
+	HAL_CAN_AddTxMessage(priv_hcan, &pTxHeader, enter_CM_data, &pTxMailbox);
+}
+
+
+void T_motor_controller::exitControlMode(uint8_t can_id_){
+	uint8_t exit_CM_data[8];
+	exit_CM_data[0] = 0xFF;
+	exit_CM_data[1] = 0xFF;
+	exit_CM_data[2] = 0xFF;
+	exit_CM_data[3] = 0xFF;
+	exit_CM_data[4] = 0xFF;
+	exit_CM_data[5] = 0xFF;
+	exit_CM_data[6] = 0xFF;
+	exit_CM_data[7] = 0xFD;
+	pTxHeader.StdId = can_id_;
+	HAL_CAN_AddTxMessage(priv_hcan, &pTxHeader, exit_CM_data, &pTxMailbox);
+}
+
+
+void T_motor_controller::setZeroPosition(uint8_t can_id_){
+	uint8_t set_ZP_data[8];
+	set_ZP_data[0] = 0xFF;
+	set_ZP_data[1] = 0xFF;
+	set_ZP_data[2] = 0xFF;
+	set_ZP_data[3] = 0xFF;
+	set_ZP_data[4] = 0xFF;
+	set_ZP_data[5] = 0xFF;
+	set_ZP_data[6] = 0xFF;
+	set_ZP_data[7] = 0xFE;
+	pTxHeader.StdId = can_id_;
+	HAL_CAN_AddTxMessage(priv_hcan, &pTxHeader, set_ZP_data, &pTxMailbox);
+}
+
+
 // call from timer-ISR to move all registered motor
 // In this function...
 // 1. convert from integer data to float data in motor_status class
@@ -83,6 +134,6 @@ void T_motor_controller::execute(void){
 	}
 	for(auto& e : motor){
 		pack_cmd(e);
-		HAL_CAN_AddTxMessage(priv_hcan, &pTxHeader, TxData, &TxMailbox);
+		HAL_CAN_AddTxMessage(priv_hcan, &pTxHeader, pTxData, &pTxMailbox);
 	}
 }
