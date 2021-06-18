@@ -155,42 +155,29 @@ int main(void)
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
   /** CAN **/
-  HAL_CAN_Start(&hcan1);
-  if(HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK){
-	  Error_Handler();
-  }
+    HAL_CAN_Start(&hcan1);
+    if(HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK){
+  	  Error_Handler();
+    }
 
-  /** motor **/
-  controller.add_motor(MOTOR_ID, MotorModel::AK80_6);
-  controller.setTargetPosition(MOTOR_ID, 0.0);
-  controller.setTargetVelocity(MOTOR_ID, 0.0);
-  controller.setTargetEffort(MOTOR_ID, 0.0);
-  controller.setKp(MOTOR_ID, 0.0);
-  controller.setKd(MOTOR_ID, 0.0);
-  controller.enterControlMode(MOTOR_ID);
+    if(f_mount(&SDFatFS, (TCHAR const*)SDPath, 0) != FR_OK){
+    	Error_Handler();
+	}
+    file_res = f_open(&SDFile, filename, FA_CREATE_ALWAYS|FA_WRITE);
+    if(file_res != FR_OK){	// error occurs
+    	Error_Handler();
+	}
 
-  /** SD-card **/
-  if(f_mount(&SDFatFS, (TCHAR const*)SDPath, 0) != FR_OK){
-	  Error_Handler();
-  }
-  if(f_open(&SDFile, filename, FA_CREATE_ALWAYS|FA_WRITE) != FR_OK){
-	  Error_Handler();
-  }
-
-  sprintf(write_buffer, "Time[ms], ");
-  f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
-
-  for(uint8_t i=0; i<controller.getMotorNum(); i++){
-	  sprintf(write_buffer, "Pos, Vel, Eff, ");
-	  f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
-  }
-
-  f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
+    /** motor **/
+    controller.add_motor(MOTOR_ID, MotorModel::AK80_6);
+    controller.setTargetPosition(MOTOR_ID, 0.0);
+    controller.setTargetVelocity(MOTOR_ID, 0.0);
+    controller.setTargetEffort(MOTOR_ID, 0.0);
+    controller.setKp(MOTOR_ID, 0.0);
+    controller.setKd(MOTOR_ID, 0.0);
+    controller.enterControlMode(MOTOR_ID);
 
 
-  controlFlag = true;
-
-  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -210,7 +197,6 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
-  osTimerStart(ControllerTimerHandle, TIME_OVER_MS);
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -336,18 +322,18 @@ static void MX_CAN1_Init(void)
   }
   /* USER CODE BEGIN CAN1_Init 2 */
   // Filter Settings (accept message from all ID)
-    CAN_FilterTypeDef filter;
-    filter.FilterIdHigh = 0;
-    filter.FilterIdLow = 0;
-    filter.FilterMaskIdHigh = 0;
-    filter.FilterMaskIdLow = 0;
-    filter.FilterScale = CAN_FILTERSCALE_32BIT;
-    filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
-    filter.FilterBank = 0;
-    filter.FilterMode = CAN_FILTERMODE_IDMASK;
-    filter.SlaveStartFilterBank = 14;
-    filter.FilterActivation = ENABLE;
-    HAL_CAN_ConfigFilter(&hcan1, &filter);
+      CAN_FilterTypeDef filter;
+      filter.FilterIdHigh = 0;
+      filter.FilterIdLow = 0;
+      filter.FilterMaskIdHigh = 0;
+      filter.FilterMaskIdLow = 0;
+      filter.FilterScale = CAN_FILTERSCALE_32BIT;
+      filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+      filter.FilterBank = 0;
+      filter.FilterMode = CAN_FILTERMODE_IDMASK;
+      filter.SlaveStartFilterBank = 14;
+      filter.FilterActivation = ENABLE;
+      HAL_CAN_ConfigFilter(&hcan1, &filter);
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -373,7 +359,7 @@ static void MX_SDMMC1_SD_Init(void)
   hsd1.Init.ClockPowerSave = SDMMC_CLOCK_POWER_SAVE_DISABLE;
   hsd1.Init.BusWide = SDMMC_BUS_WIDE_1B;
   hsd1.Init.HardwareFlowControl = SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
-  hsd1.Init.ClockDiv = 0;
+  hsd1.Init.ClockDiv = 2;
   /* USER CODE BEGIN SDMMC1_Init 2 */
 
   /* USER CODE END SDMMC1_Init 2 */
@@ -571,24 +557,38 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 void StartSDcard(void *argument)
 {
   /* USER CODE BEGIN 5 */
+	/** SD-card **/
+
+	    sprintf(write_buffer, "Time[ms], ");
+	    f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
+
+	    for(uint8_t i=0; i<controller.getMotorNum(); i++){
+	  	  sprintf(write_buffer, "Pos, Vel, Eff, ");
+	  	  f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
+	    }
+
+	    f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
 
 
-	  /* Infinite loop */
-	  for(;;)
-	  {
-		sprintf(time_buffer, "%" PRIu32, HAL_GetTick());
-		f_write(&SDFile, time_buffer, strlen((char *)time_buffer), (UINT*)&byteswritten);
+	    controlFlag = true;
 
-		for(uint8_t i=0; i<controller.getMotorNum(); i++){
-			sprintf(write_buffer, "%f, %f, %f, ", controller.getPosition(MOTOR_ID), controller.getVelocity(MOTOR_ID), controller.getEffort(MOTOR_ID));
-			f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
-		}
-		f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
+	    HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+	/* Infinite loop */
+		  for(;;)
+		  {
+			sprintf(time_buffer, "%" PRIu32, HAL_GetTick());
+			f_write(&SDFile, time_buffer, strlen((char *)time_buffer), (UINT*)&byteswritten);
 
-		// HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
-		osDelay(100);
+			for(uint8_t i=0; i<controller.getMotorNum(); i++){
+				sprintf(write_buffer, "%f, %f, %f, ", controller.getPosition(MOTOR_ID), controller.getVelocity(MOTOR_ID), controller.getEffort(MOTOR_ID));
+				f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
+			}
+			f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
 
-	  }
+			// HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+			osDelay(100);
+
+		  }
   /* USER CODE END 5 */
 }
 
@@ -603,13 +603,12 @@ void StartCanTx(void *argument)
 {
   /* USER CODE BEGIN StartCanTx */
   /* Infinite loop */
-	for(;;)
-  {
-	  // CAN_TX_Backup
-	if(controlFlag == true)
-		controller.execute();	// send command to all registered motors
-	osDelay(10);
-  }
+	for(;;){
+		// CAN_TX_Backup
+		if(controlFlag == true)
+			controller.execute();	// send command to all registered motors
+		osDelay(10);
+	}
   /* USER CODE END StartCanTx */
 }
 
