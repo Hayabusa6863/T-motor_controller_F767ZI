@@ -305,7 +305,19 @@ static void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
-
+  // Filter Settings (accept message from all ID)
+    CAN_FilterTypeDef filter;
+    filter.FilterIdHigh = 0;
+    filter.FilterIdLow = 0;
+    filter.FilterMaskIdHigh = 0;
+    filter.FilterMaskIdLow = 0;
+    filter.FilterScale = CAN_FILTERSCALE_32BIT;
+    filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+    filter.FilterBank = 0;
+    filter.FilterMode = CAN_FILTERMODE_IDMASK;
+    filter.SlaveStartFilterBank = 14;
+    filter.FilterActivation = ENABLE;
+    HAL_CAN_ConfigFilter(&hcan1, &filter);
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -530,6 +542,7 @@ void StartSDcard(void *argument)
 {
   /* USER CODE BEGIN 5 */
 	/** SD-card **/
+	/*
 	  if(f_mount(&SDFatFS, (TCHAR const*)SDPath, 0) != FR_OK){
 		  Error_Handler();
 	  }
@@ -546,9 +559,11 @@ void StartSDcard(void *argument)
 	  }
 
 	  f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
+	  */
 	  /* Infinite loop */
 	  for(;;)
 	  {
+		  /*
 		sprintf(time_buffer, "%" PRIu32, HAL_GetTick());
 		f_write(&SDFile, time_buffer, strlen((char *)time_buffer), (UINT*)&byteswritten);
 
@@ -557,10 +572,12 @@ void StartSDcard(void *argument)
 			f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
 		}
 		f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
+		*/
+		HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+	    osDelay(1000);
 
-	    osDelay(10);
 	  }
-	  	HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+
   /* USER CODE END 5 */
 }
 
@@ -586,7 +603,7 @@ void StartCanTx(void *argument)
 		controller.exitControlMode(MOTOR_ID);
 		f_close(&SDFile);
 		f_mount(&SDFatFS, (TCHAR const*)NULL, 0);
-		HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+		// HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 	}
 	osDelay(10);
   }
