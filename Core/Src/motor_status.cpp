@@ -8,6 +8,10 @@ motor_status::motor_status(void){
 	pos_int = 1<<(Position_bit_num-1);	// set default value (equals to 0)
 	vel_int = 1<<(Velocity_bit_num-1);
 	eff_int = 1<<(Effort_bit_num-1);
+
+	pos = 0.0;
+	vel = 0.0;
+	eff = 0.0;
 }
 
 
@@ -19,6 +23,10 @@ motor_status::motor_status(uint8_t id_, MotorModel mt){
 	pos_int = 1<<(Position_bit_num-1);
 	vel_int = 1<<(Velocity_bit_num-1);
 	eff_int = 1<<(Effort_bit_num-1);
+
+	pos = 0.0;
+	vel = 0.0;
+	eff = 0.0;
 
 	setParam(mt);
 }

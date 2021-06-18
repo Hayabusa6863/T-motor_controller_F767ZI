@@ -9,10 +9,10 @@
   * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
   * All rights reserved.</center></h2>
   *
-  * This software component is licensed by ST under BSD 3-Clause license,
-  * the "License"; You may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at:
-  *                        opensource.org/licenses/BSD-3-Clause
+  * This software component is licensed by ST under Ultimate Liberty license
+  * SLA0044, the "License"; You may not use this file except in compliance with
+  * the License. You may obtain a copy of the License at:
+  *                             www.st.com/SLA0044
   *
   ******************************************************************************
   */
@@ -24,10 +24,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "stdio.h"
-#include "string.h"
-#include "T_motor_controller.h"
-#include "inttypes.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -37,8 +34,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define TIME_OVER_MS	10000
-#define MOTOR_ID	3
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -64,30 +59,19 @@ const osThreadAttr_t SDcard_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for CAN_Tx */
+osThreadId_t CAN_TxHandle;
+const osThreadAttr_t CAN_Tx_attributes = {
+  .name = "CAN_Tx",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityAboveNormal,
+};
 /* Definitions for CAN_send_timer */
 osTimerId_t CAN_send_timerHandle;
 const osTimerAttr_t CAN_send_timer_attributes = {
   .name = "CAN_send_timer"
 };
 /* USER CODE BEGIN PV */
-/* SD-card */
-FRESULT file_res;
-uint32_t byteswritten, bytesread;
-uint8_t wtext[] = "SD card check\r\n";
-char write_buffer[_MAX_SS];
-char time_buffer[64];
-char EOL[] = "\r\n";
-static const char* filename = "log10ms.csv";
-
-bool controlFlag = false;
-bool SDFlag = false;
-
-/* CAN-communication */
-CAN_RxHeaderTypeDef RxHeader;
-uint8_t Rx_buffer[8];
-
-/* T-motor_controller */
-T_motor_controller controller(&hcan1);
 
 /* USER CODE END PV */
 
@@ -100,10 +84,11 @@ static void MX_USB_OTG_FS_PCD_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_SDMMC1_SD_Init(void);
 void StartSDcard(void *argument);
+void StartCanTx(void *argument);
 void CAN_send(void *argument);
 
 /* USER CODE BEGIN PFP */
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef*);	// CAN receive interrupt function
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -146,23 +131,7 @@ int main(void)
   MX_SDMMC1_SD_Init();
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
-  /** CAN **/
-  HAL_CAN_Start(&hcan1);
-  if(HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK){
-	  Error_Handler();
-  }
 
-  /** motor **/
-  controller.add_motor(MOTOR_ID, MotorModel::AK80_6);
-  controller.setTargetPosition(MOTOR_ID, 0.0);
-  controller.setTargetVelocity(MOTOR_ID, 0.0);
-  controller.setTargetEffort(MOTOR_ID, 0.0);
-  controller.setKp(MOTOR_ID, 0.0);
-  controller.setKd(MOTOR_ID, 0.0);
-  controller.enterControlMode(MOTOR_ID);
-  controlFlag = true;
-
-  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -182,7 +151,6 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
-  osTimerStart(CAN_send_timerHandle, 1000);
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -192,6 +160,9 @@ int main(void)
   /* Create the thread(s) */
   /* creation of SDcard */
   SDcardHandle = osThreadNew(StartSDcard, NULL, &SDcard_attributes);
+
+  /* creation of CAN_Tx */
+  CAN_TxHandle = osThreadNew(StartCanTx, NULL, &CAN_Tx_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -510,12 +481,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
-	if(HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, Rx_buffer) == HAL_OK){
-		// copy RxMessage data to buffer(no conversion from integer to float due to ISR context)
-		controller.unpack_reply(Rx_buffer);
-	}
-}
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartSDcard */
@@ -528,58 +494,37 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 void StartSDcard(void *argument)
 {
   /* USER CODE BEGIN 5 */
-	/** SD-card **/
-  if(f_mount(&SDFatFS, (TCHAR const*)SDPath, 0) != FR_OK){
-	  Error_Handler();
-  }
-  if(f_open(&SDFile, filename, FA_CREATE_ALWAYS|FA_WRITE) != FR_OK){
-	  Error_Handler();
-  }
-
-  sprintf(write_buffer, "Time[ms], ");
-  f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
-
-  for(uint8_t i=0; i<controller.getMotorNum(); i++){
-	  sprintf(write_buffer, "Pos, Vel, Eff, ");
-	  f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
-  }
-
-  f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
   /* Infinite loop */
   for(;;)
   {
-	sprintf(time_buffer, "%" PRIu32, HAL_GetTick());
-	f_write(&SDFile, time_buffer, strlen((char *)time_buffer), (UINT*)&byteswritten);
-
-	for(uint8_t i=0; i<controller.getMotorNum(); i++){
-		sprintf(write_buffer, "%f, %f, %f, ", controller.getPosition(MOTOR_ID), controller.getVelocity(MOTOR_ID), controller.getEffort(MOTOR_ID));
-		f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
-	}
-	f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
-
-    osDelay(10);
+    osDelay(1);
   }
   /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartCanTx */
+/**
+* @brief Function implementing the CAN_Tx thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartCanTx */
+void StartCanTx(void *argument)
+{
+  /* USER CODE BEGIN StartCanTx */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartCanTx */
 }
 
 /* CAN_send function */
 void CAN_send(void *argument)
 {
-
   /* USER CODE BEGIN CAN_send */
-	/*
-	if(controlFlag == true)
-		controller.execute();	// send command to all registered motors
 
-	if((HAL_GetTick() > TIME_OVER_MS) && (controlFlag == true)){
-		controlFlag = false;
-		controller.exitControlMode(MOTOR_ID);
-		f_close(&SDFile);
-		f_mount(&SDFatFS, (TCHAR const*)NULL, 0);
-		HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-	}
-	*/
-	HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
   /* USER CODE END CAN_send */
 }
 
@@ -615,7 +560,6 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
-	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
   }
   /* USER CODE END Error_Handler_Debug */
 }
