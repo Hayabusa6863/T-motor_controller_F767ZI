@@ -71,8 +71,13 @@ const osThreadAttr_t CAN_Tx_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
+/* Definitions for ControllerTimer */
+osTimerId_t ControllerTimerHandle;
+const osTimerAttr_t ControllerTimer_attributes = {
+  .name = "ControllerTimer"
+};
 /* USER CODE BEGIN PV */
-/* SD-card */
+// SD-card
 FRESULT file_res;
 uint32_t byteswritten, bytesread;
 uint8_t wtext[] = "SD card check\r\n";
@@ -84,13 +89,12 @@ static const char* filename = "log10ms.csv";
 bool controlFlag = false;
 bool SDFlag = false;
 
-/* CAN-communication */
+// CAN-communication
 CAN_RxHeaderTypeDef RxHeader;
 uint8_t Rx_buffer[8];
 
-/* T-motor_controller */
+// T-motor_controller
 T_motor_controller controller(&hcan1);
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -103,6 +107,7 @@ static void MX_CAN1_Init(void);
 static void MX_SDMMC1_SD_Init(void);
 void StartSDcard(void *argument);
 void StartCanTx(void *argument);
+void StopController(void *argument);
 
 /* USER CODE BEGIN PFP */
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef*);	// CAN receive interrupt function
@@ -150,22 +155,22 @@ int main(void)
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
   /** CAN **/
-    HAL_CAN_Start(&hcan1);
-    if(HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK){
-  	  Error_Handler();
-    }
+  HAL_CAN_Start(&hcan1);
+  if(HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK){
+	  Error_Handler();
+  }
 
-    /** motor **/
-    controller.add_motor(MOTOR_ID, MotorModel::AK80_6);
-    controller.setTargetPosition(MOTOR_ID, 0.0);
-    controller.setTargetVelocity(MOTOR_ID, 0.0);
-    controller.setTargetEffort(MOTOR_ID, 0.0);
-    controller.setKp(MOTOR_ID, 0.0);
-    controller.setKd(MOTOR_ID, 0.0);
-    controller.enterControlMode(MOTOR_ID);
-    controlFlag = true;
+  /** motor **/
+  controller.add_motor(MOTOR_ID, MotorModel::AK80_6);
+  controller.setTargetPosition(MOTOR_ID, 0.0);
+  controller.setTargetVelocity(MOTOR_ID, 0.0);
+  controller.setTargetEffort(MOTOR_ID, 0.0);
+  controller.setKp(MOTOR_ID, 0.0);
+  controller.setKd(MOTOR_ID, 0.0);
+  controller.enterControlMode(MOTOR_ID);
+  controlFlag = true;
 
-    HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -178,6 +183,10 @@ int main(void)
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
+
+  /* Create the timer(s) */
+  /* creation of ControllerTimer */
+  ControllerTimerHandle = osTimerNew(StopController, osTimerOnce, NULL, &ControllerTimer_attributes);
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
@@ -305,19 +314,7 @@ static void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
-  // Filter Settings (accept message from all ID)
-    CAN_FilterTypeDef filter;
-    filter.FilterIdHigh = 0;
-    filter.FilterIdLow = 0;
-    filter.FilterMaskIdHigh = 0;
-    filter.FilterMaskIdLow = 0;
-    filter.FilterScale = CAN_FILTERSCALE_32BIT;
-    filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
-    filter.FilterBank = 0;
-    filter.FilterMode = CAN_FILTERMODE_IDMASK;
-    filter.SlaveStartFilterBank = 14;
-    filter.FilterActivation = ENABLE;
-    HAL_CAN_ConfigFilter(&hcan1, &filter);
+
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -574,10 +571,9 @@ void StartSDcard(void *argument)
 		f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
 		*/
 		HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
-	    osDelay(1000);
+		osDelay(1000);
 
 	  }
-
   /* USER CODE END 5 */
 }
 
@@ -592,7 +588,7 @@ void StartCanTx(void *argument)
 {
   /* USER CODE BEGIN StartCanTx */
   /* Infinite loop */
-  for(;;)
+	for(;;)
   {
 	  // CAN_TX_Backup
 	if(controlFlag == true)
@@ -608,6 +604,14 @@ void StartCanTx(void *argument)
 	osDelay(10);
   }
   /* USER CODE END StartCanTx */
+}
+
+/* StopController function */
+void StopController(void *argument)
+{
+  /* USER CODE BEGIN StopController */
+
+  /* USER CODE END StopController */
 }
 
  /**
