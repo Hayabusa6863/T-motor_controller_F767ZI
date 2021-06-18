@@ -84,7 +84,7 @@ uint8_t wtext[] = "SD card check\r\n";
 char write_buffer[_MAX_SS];
 char time_buffer[64];
 char EOL[] = "\r\n";
-static const char* filename = "log10ms.csv";
+const char* filename = "log.TXT";
 
 bool controlFlag = false;
 bool SDFlag = false;
@@ -168,9 +168,29 @@ int main(void)
   controller.setKp(MOTOR_ID, 0.0);
   controller.setKd(MOTOR_ID, 0.0);
   controller.enterControlMode(MOTOR_ID);
+
+  /** SD-card **/
+  if(f_mount(&SDFatFS, (TCHAR const*)SDPath, 0) != FR_OK){
+	  Error_Handler();
+  }
+  if(f_open(&SDFile, filename, FA_CREATE_ALWAYS|FA_WRITE) != FR_OK){
+	  Error_Handler();
+  }
+
+  sprintf(write_buffer, "Time[ms], ");
+  f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
+
+  for(uint8_t i=0; i<controller.getMotorNum(); i++){
+	  sprintf(write_buffer, "Pos, Vel, Eff, ");
+	  f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
+  }
+
+  f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
+
+
   controlFlag = true;
 
-  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -190,6 +210,7 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
+  osTimerStart(ControllerTimerHandle, TIME_OVER_MS);
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -314,7 +335,19 @@ static void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
-
+  // Filter Settings (accept message from all ID)
+    CAN_FilterTypeDef filter;
+    filter.FilterIdHigh = 0;
+    filter.FilterIdLow = 0;
+    filter.FilterMaskIdHigh = 0;
+    filter.FilterMaskIdLow = 0;
+    filter.FilterScale = CAN_FILTERSCALE_32BIT;
+    filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+    filter.FilterBank = 0;
+    filter.FilterMode = CAN_FILTERMODE_IDMASK;
+    filter.SlaveStartFilterBank = 14;
+    filter.FilterActivation = ENABLE;
+    HAL_CAN_ConfigFilter(&hcan1, &filter);
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -538,29 +571,11 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 void StartSDcard(void *argument)
 {
   /* USER CODE BEGIN 5 */
-	/** SD-card **/
-	/*
-	  if(f_mount(&SDFatFS, (TCHAR const*)SDPath, 0) != FR_OK){
-		  Error_Handler();
-	  }
-	  if(f_open(&SDFile, filename, FA_CREATE_ALWAYS|FA_WRITE) != FR_OK){
-		  Error_Handler();
-	  }
 
-	  sprintf(write_buffer, "Time[ms], ");
-	  f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
 
-	  for(uint8_t i=0; i<controller.getMotorNum(); i++){
-		  sprintf(write_buffer, "Pos, Vel, Eff, ");
-		  f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
-	  }
-
-	  f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
-	  */
 	  /* Infinite loop */
 	  for(;;)
 	  {
-		  /*
 		sprintf(time_buffer, "%" PRIu32, HAL_GetTick());
 		f_write(&SDFile, time_buffer, strlen((char *)time_buffer), (UINT*)&byteswritten);
 
@@ -569,9 +584,9 @@ void StartSDcard(void *argument)
 			f_write(&SDFile, write_buffer, strlen((char *)write_buffer), (UINT*)&byteswritten);
 		}
 		f_write(&SDFile, EOL, strlen((char *)EOL), (UINT*)&byteswritten);
-		*/
-		HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
-		osDelay(1000);
+
+		// HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+		osDelay(100);
 
 	  }
   /* USER CODE END 5 */
@@ -593,14 +608,6 @@ void StartCanTx(void *argument)
 	  // CAN_TX_Backup
 	if(controlFlag == true)
 		controller.execute();	// send command to all registered motors
-
-	if((HAL_GetTick() > TIME_OVER_MS) && (controlFlag == true)){
-		controlFlag = false;
-		controller.exitControlMode(MOTOR_ID);
-		f_close(&SDFile);
-		f_mount(&SDFatFS, (TCHAR const*)NULL, 0);
-		// HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-	}
 	osDelay(10);
   }
   /* USER CODE END StartCanTx */
@@ -610,7 +617,11 @@ void StartCanTx(void *argument)
 void StopController(void *argument)
 {
   /* USER CODE BEGIN StopController */
-
+	controlFlag = false;
+	controller.exitControlMode(MOTOR_ID);
+	f_close(&SDFile);
+	f_mount(&SDFatFS, (TCHAR const*)NULL, 0);
+	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
   /* USER CODE END StopController */
 }
 
